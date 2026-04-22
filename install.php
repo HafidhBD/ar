@@ -5,9 +5,15 @@
  */
 session_start();
 
-$step = (int)($_GET['step'] ?? ($_POST['step'] ?? 1));
 $errors = [];
 $success = false;
+
+// Determine current step: POST uses hidden field, GET uses query param
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $step = (int)($_POST['step'] ?? 1);
+} else {
+    $step = (int)($_GET['step'] ?? 1);
+}
 
 // Already installed check
 if (file_exists(__DIR__ . '/installed.lock') && $step < 4) {
@@ -24,6 +30,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $dbUser = trim($_POST['db_user'] ?? '');
         $dbPass = $_POST['db_pass'] ?? '';
 
+        // Validate that credentials are not empty
+        if (empty($dbName) || empty($dbUser)) {
+            $errors[] = 'Database name and username are required.';
+            $step = 2;
+        }
+
+        if (empty($errors)) {
         try {
             $pdo = new PDO("mysql:host={$dbHost};dbname={$dbName};charset=utf8mb4", $dbUser, $dbPass,
                 [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
@@ -65,6 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $errors[] = 'Database error: ' . $e->getMessage();
             $step = 2;
         }
+        } // end if empty errors
     }
 
     // Step 3: Create Admin Account
@@ -384,25 +398,23 @@ function getTableSQL() {
 
         <?php foreach ($errors as $err): ?><div class="alert alert-danger"><i class="fas fa-times-circle"></i> <?= esc($err) ?></div><?php endforeach; ?>
 
-        <form method="POST">
+        <form method="POST" action="install.php" autocomplete="off">
             <input type="hidden" name="step" value="2">
             <div class="form-group">
                 <label>Database Host</label>
-                <input type="text" name="db_host" value="localhost" required>
+                <input type="text" name="db_host" value="<?= esc($_POST['db_host'] ?? 'localhost') ?>" required>
             </div>
             <div class="form-group">
                 <label>Database Name</label>
-                <input type="text" name="db_name" value="u983353360_ar" required placeholder="Enter database name">
+                <input type="text" name="db_name" value="<?= esc($_POST['db_name'] ?? 'u983353360_ar') ?>" required placeholder="Enter database name">
             </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Username</label>
-                    <input type="text" name="db_user" value="u983353360_ar" required>
-                </div>
-                <div class="form-group">
-                    <label>Password</label>
-                    <input type="password" name="db_pass" value="yYu2A5s/" required>
-                </div>
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" name="db_user" value="<?= esc($_POST['db_user'] ?? 'u983353360_ar') ?>" required>
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="text" name="db_pass" value="<?= esc($_POST['db_pass'] ?? 'yYu2A5s/') ?>" required>
             </div>
             <button type="submit" class="btn"><i class="fas fa-database"></i> Connect & Create Tables</button>
             <a href="install.php?step=1" class="btn btn-outline" style="margin-top:8px"><i class="fas fa-arrow-right"></i> Back</a>
@@ -415,7 +427,7 @@ function getTableSQL() {
         <div class="alert alert-success"><i class="fas fa-check-circle"></i> Database connected and tables created successfully!</div>
         <?php foreach ($errors as $err): ?><div class="alert alert-danger"><i class="fas fa-times-circle"></i> <?= esc($err) ?></div><?php endforeach; ?>
 
-        <form method="POST">
+        <form method="POST" action="install.php" autocomplete="off">
             <input type="hidden" name="step" value="3">
             <div class="form-group">
                 <label>Admin Name</label>
