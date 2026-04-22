@@ -46,7 +46,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($result) {
                 $msg = $lang['email_sent_success']; $msgType = 'success';
             } else {
-                $msg = $lang['email_sent_failed']; $msgType = 'danger';
+                $smtpError = getLastEmailError();
+                $smtpLog = getSmtpDebugLog();
+                $msg = $lang['email_sent_failed'];
+                if ($smtpError) $msg .= ' — ' . $smtpError;
+                $msgType = 'danger';
+                // Store debug log to show below
+                $debugLog = $smtpLog;
             }
         }
     }
@@ -189,6 +195,12 @@ require_once 'includes/header.php';
             <button type="submit" class="btn btn-success"><i class="fas fa-paper-plane"></i> <?= e($lang['test_email']) ?></button>
         </div>
     </form>
+    <?php if (!empty($debugLog)): ?>
+    <div class="card-body" style="border-top:1px solid var(--border)">
+        <div class="form-label" style="color:var(--danger);margin-bottom:8px"><i class="fas fa-bug"></i> SMTP Debug Log:</div>
+        <pre style="background:#f8fafc;border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;font-size:12px;color:#475569;white-space:pre-wrap;word-break:break-all;max-height:300px;overflow-y:auto;font-family:monospace"><?= e($debugLog) ?></pre>
+    </div>
+    <?php endif; ?>
 </div>
 
 <!-- Upload Settings -->

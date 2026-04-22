@@ -50,8 +50,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // Upload files
-    if (($_POST['action'] ?? '') === 'upload_files') {
+    // Upload files (admin/PM only)
+    if (($_POST['action'] ?? '') === 'upload_files' && isWavesSide()) {
         if (!empty($_FILES['delivery_files']['name'][0])) {
             $uploadDir = UPLOAD_DIR . 'attachments/';
             if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
@@ -235,7 +235,8 @@ require_once 'includes/header.php';
                     <p class="text-center text-muted" style="padding:16px"><?= e($lang['no_files']) ?></p>
                 <?php endif; ?>
 
-                <!-- Upload form -->
+                <!-- Upload form (admin/PM only) -->
+                <?php if (isWavesSide()): ?>
                 <form method="POST" enctype="multipart/form-data" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
                     <?= csrfField() ?>
                     <input type="hidden" name="action" value="upload_files">
@@ -247,6 +248,7 @@ require_once 'includes/header.php';
                     <ul class="file-list" id="deliveryList"></ul>
                     <button type="submit" class="btn btn-primary mt-2" id="deliveryBtn" style="display:none"><i class="fas fa-upload"></i> <?= e($lang['upload_files']) ?></button>
                 </form>
+                <?php endif; ?>
             </div>
         </div>
 

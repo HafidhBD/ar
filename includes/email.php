@@ -4,9 +4,16 @@
  * Uses PHP mail() as fallback, SMTP when configured
  */
 
+// Global var to capture last SMTP error for debugging
+$GLOBALS['_smtp_last_error'] = '';
+$GLOBALS['_smtp_debug_log'] = '';
+
 function sendEmail($to, $subject, $body, $isHtml = true) {
+    $GLOBALS['_smtp_last_error'] = '';
+    $GLOBALS['_smtp_debug_log'] = '';
+
     $smtpHost = getSetting('smtp_host', '');
-    $smtpPort = getSetting('smtp_port', '587');
+    $smtpPort = (int)getSetting('smtp_port', '587');
     $smtpUser = getSetting('smtp_username', '');
     $smtpPass = getSetting('smtp_password', '');
     $smtpEncryption = getSetting('smtp_encryption', 'tls');
@@ -26,55 +33,174 @@ function sendEmail($to, $subject, $body, $isHtml = true) {
         $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
     }
 
-    return @mail($to, $subject, $body, $headers);
+    $result = @mail($to, $subject, $body, $headers);
+    if (!$result) {
+        $GLOBALS['_smtp_last_error'] = 'PHP mail() function failed. Check server mail configuration.';
+    }
+    return $result;
+}
+
+function getLastEmailError() {
+    return $GLOBALS['_smtp_last_error'] ?? '';
+}
+
+function getSmtpDebugLog() {
+    return $GLOBALS['_smtp_debug_log'] ?? '';
 }
 
 /**
- * Simple SMTP sender (shared-hosting friendly, no external libs)
+ * SMTP sender with full error checking (shared-hosting friendly)
  */
 function sendSmtpEmail($host, $port, $user, $pass, $encryption, $fromEmail, $fromName, $to, $subject, $body, $isHtml) {
+    $log = '';
+
     try {
-        $socket = ($encryption === 'ssl')
-            ? @fsockopen("ssl://{$host}", $port, $errno, $errstr, 10)
-            : @fsockopen($host, $port, $errno, $errstr, 10);
+        // Step 1: Connect
+        $log .= "[CONNECT] {$host}:{$port} ({$encryption})\n";
 
-        if (!$socket) return false;
-
-        smtpRead($socket);
-        smtpCmd($socket, "EHLO " . gethostname());
-
-        if ($encryption === 'tls') {
-            smtpCmd($socket, "STARTTLS");
-            stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
-            smtpCmd($socket, "EHLO " . gethostname());
-        }
-
-        smtpCmd($socket, "AUTH LOGIN");
-        smtpCmd($socket, base64_encode($user));
-        smtpCmd($socket, base64_encode($pass));
-        smtpCmd($socket, "MAIL FROM:<{$fromEmail}>");
-        smtpCmd($socket, "RCPT TO:<{$to}>");
-        smtpCmd($socket, "DATA");
-
-        $headers = "From: {$fromName} <{$fromEmail}>\r\n";
-        $headers .= "To: {$to}\r\n";
-        $headers .= "Subject: =?UTF-8?B?" . base64_encode($subject) . "?=\r\n";
-        $headers .= "MIME-Version: 1.0\r\n";
-        if ($isHtml) {
-            $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
+        if ($encryption === 'ssl') {
+            $socket = @fsockopen("ssl://{$host}", $port, $errno, $errstr, 15);
         } else {
-            $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
+            $socket = @fsockopen($host, $port, $errno, $errstr, 15);
         }
-        $headers .= "\r\n";
 
-        fwrite($socket, $headers . $body . "\r\n.\r\n");
-        smtpRead($socket);
+        if (!$socket) {
+            $GLOBALS['_smtp_last_error'] = "Connection failed: {$errstr} (error {$errno}). Check host/port.";
+            $GLOBALS['_smtp_debug_log'] = $log . "[ERROR] {$errstr}\n";
+            return false;
+        }
+
+        stream_set_timeout($socket, 15);
+
+        // Step 2: Read greeting
+        $resp = smtpRead($socket);
+        $log .= "[GREETING] {$resp}";
+        if (!smtpOk($resp, 220)) {
+            $GLOBALS['_smtp_last_error'] = "Server rejected connection: {$resp}";
+            $GLOBALS['_smtp_debug_log'] = $log;
+            fclose($socket);
+            return false;
+        }
+
+        // Step 3: EHLO
+        $resp = smtpCmd($socket, "EHLO " . (gethostname() ?: 'localhost'));
+        $log .= "[EHLO] {$resp}";
+
+        // Step 4: STARTTLS (if TLS)
+        if ($encryption === 'tls') {
+            $resp = smtpCmd($socket, "STARTTLS");
+            $log .= "[STARTTLS] {$resp}";
+            if (!smtpOk($resp, 220)) {
+                $GLOBALS['_smtp_last_error'] = "STARTTLS failed: {$resp}";
+                $GLOBALS['_smtp_debug_log'] = $log;
+                fclose($socket);
+                return false;
+            }
+
+            $crypto = stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT | STREAM_CRYPTO_METHOD_TLSv1_1_CLIENT | STREAM_CRYPTO_METHOD_TLS_CLIENT);
+            if (!$crypto) {
+                $GLOBALS['_smtp_last_error'] = "TLS encryption handshake failed. Try SSL encryption instead.";
+                $GLOBALS['_smtp_debug_log'] = $log . "[ERROR] TLS handshake failed\n";
+                fclose($socket);
+                return false;
+            }
+            $log .= "[TLS] Encryption enabled\n";
+
+            $resp = smtpCmd($socket, "EHLO " . (gethostname() ?: 'localhost'));
+            $log .= "[EHLO2] {$resp}";
+        }
+
+        // Step 5: AUTH LOGIN
+        $resp = smtpCmd($socket, "AUTH LOGIN");
+        $log .= "[AUTH] {$resp}";
+        if (!smtpOk($resp, 334)) {
+            $GLOBALS['_smtp_last_error'] = "AUTH LOGIN not accepted: {$resp}";
+            $GLOBALS['_smtp_debug_log'] = $log;
+            fclose($socket);
+            return false;
+        }
+
+        $resp = smtpCmd($socket, base64_encode($user));
+        $log .= "[USER] " . substr($resp, 0, 50) . "\n";
+
+        $resp = smtpCmd($socket, base64_encode($pass));
+        $log .= "[PASS] " . substr($resp, 0, 50) . "\n";
+        if (!smtpOk($resp, 235)) {
+            $GLOBALS['_smtp_last_error'] = "Authentication failed. Check username/password. Server: " . trim($resp);
+            $GLOBALS['_smtp_debug_log'] = $log;
+            fclose($socket);
+            return false;
+        }
+
+        // Step 6: MAIL FROM
+        $resp = smtpCmd($socket, "MAIL FROM:<{$fromEmail}>");
+        $log .= "[FROM] {$resp}";
+        if (!smtpOk($resp, 250)) {
+            $GLOBALS['_smtp_last_error'] = "MAIL FROM rejected: {$resp}";
+            $GLOBALS['_smtp_debug_log'] = $log;
+            fclose($socket);
+            return false;
+        }
+
+        // Step 7: RCPT TO
+        $resp = smtpCmd($socket, "RCPT TO:<{$to}>");
+        $log .= "[RCPT] {$resp}";
+        if (!smtpOk($resp, 250)) {
+            $GLOBALS['_smtp_last_error'] = "Recipient rejected: {$resp}";
+            $GLOBALS['_smtp_debug_log'] = $log;
+            fclose($socket);
+            return false;
+        }
+
+        // Step 8: DATA
+        $resp = smtpCmd($socket, "DATA");
+        $log .= "[DATA] {$resp}";
+        if (!smtpOk($resp, 354)) {
+            $GLOBALS['_smtp_last_error'] = "DATA command rejected: {$resp}";
+            $GLOBALS['_smtp_debug_log'] = $log;
+            fclose($socket);
+            return false;
+        }
+
+        // Step 9: Send message
+        $message = "From: {$fromName} <{$fromEmail}>\r\n";
+        $message .= "To: {$to}\r\n";
+        $message .= "Subject: =?UTF-8?B?" . base64_encode($subject) . "?=\r\n";
+        $message .= "MIME-Version: 1.0\r\n";
+        $message .= "Content-Type: " . ($isHtml ? "text/html" : "text/plain") . "; charset=UTF-8\r\n";
+        $message .= "Date: " . date('r') . "\r\n";
+        $message .= "Message-ID: <" . uniqid() . "@" . (gethostname() ?: 'waves') . ">\r\n";
+        $message .= "\r\n";
+        $message .= $body . "\r\n.\r\n";
+
+        fwrite($socket, $message);
+        $resp = smtpRead($socket);
+        $log .= "[SENT] {$resp}";
+        if (!smtpOk($resp, 250)) {
+            $GLOBALS['_smtp_last_error'] = "Message not accepted: {$resp}";
+            $GLOBALS['_smtp_debug_log'] = $log;
+            fclose($socket);
+            return false;
+        }
+
+        // Step 10: QUIT
         smtpCmd($socket, "QUIT");
         fclose($socket);
+
+        $log .= "[DONE] Email sent successfully\n";
+        $GLOBALS['_smtp_debug_log'] = $log;
         return true;
+
     } catch (Exception $e) {
+        $GLOBALS['_smtp_last_error'] = "Exception: " . $e->getMessage();
+        $GLOBALS['_smtp_debug_log'] = $log . "[EXCEPTION] " . $e->getMessage() . "\n";
+        if (isset($socket) && is_resource($socket)) fclose($socket);
         return false;
     }
+}
+
+function smtpOk($response, $expectedCode) {
+    return (int)substr(trim($response), 0, 3) === $expectedCode;
 }
 
 function smtpCmd($socket, $cmd) {
@@ -84,9 +210,14 @@ function smtpCmd($socket, $cmd) {
 
 function smtpRead($socket) {
     $response = '';
-    while ($line = @fgets($socket, 515)) {
+    $timeout = 15;
+    $start = time();
+    while (true) {
+        $line = @fgets($socket, 515);
+        if ($line === false) break;
         $response .= $line;
         if (substr($line, 3, 1) === ' ') break;
+        if (time() - $start > $timeout) break;
     }
     return $response;
 }
