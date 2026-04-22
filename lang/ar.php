@@ -93,13 +93,13 @@ return [
     'task_archived_success' => 'تم أرشفة المهمة',
 
     // Task statuses
-    'status_new' => 'جديدة',
-    'status_in_progress' => 'جاري العمل',
+    'status_new' => 'جديد',
+    'status_in_progress' => 'جاري التنفيذ',
     'status_delivered' => 'تم التسليم',
     'status_pending_review' => 'بانتظار المراجعة',
-    'status_needs_revision' => 'تحتاج مراجعة',
-    'status_completed' => 'مكتملة',
-    'status_archived' => 'مؤرشفة',
+    'status_needs_revision' => 'يحتاج تعديل',
+    'status_completed' => 'مكتمل',
+    'status_archived' => 'مؤرشف',
 
     // Priorities
     'priority_low' => 'منخفضة',

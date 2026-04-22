@@ -399,11 +399,13 @@ require_once 'includes/header.php';
     </div>
 </div>
 
-<script>
+<?php
+$extraJS = "<script>
 initFileUpload('deliveryDrop','deliveryInput','deliveryList');
 document.getElementById('deliveryInput').addEventListener('change', function() {
     document.getElementById('deliveryBtn').style.display = this.files.length > 0 ? 'inline-flex' : 'none';
 });
-</script>
+</script>";
+?>
 
 <?php require_once 'includes/footer.php'; ?>

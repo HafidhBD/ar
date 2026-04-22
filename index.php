@@ -48,9 +48,9 @@ require_once 'includes/header.php';
     <div class="card-body" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px">
         <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
             <div class="project-logos">
-                <img src="assets/img/waves-logo.png" alt="Waves" style="height:36px;filter:brightness(0) invert(1);opacity:.85">
+                <img src="assets/img/waves-logo.png" alt="Waves" style="height:36px;opacity:.9">
                 <span style="color:var(--text-muted);font-size:18px;font-weight:300">&times;</span>
-                <img src="assets/img/details-logo.png" alt="Details" style="height:36px;filter:brightness(0) invert(1);opacity:.85">
+                <img src="assets/img/details-logo.png" alt="Details" style="height:36px;opacity:.9">
             </div>
             <div>
                 <h2 style="font-size:18px;font-weight:800;margin-bottom:2px"><?= e($projectTitle) ?></h2>

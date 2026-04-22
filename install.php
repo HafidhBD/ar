@@ -301,49 +301,49 @@ function getTableSQL() {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
-        body{font-family:'Tajawal',sans-serif;background:linear-gradient(135deg,#0f172a,#1e293b,#0f172a);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
-        .card{background:rgba(255,255,255,.05);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.1);border-radius:24px;padding:48px;width:100%;max-width:580px;box-shadow:0 25px 60px rgba(0,0,0,.35)}
+        body{font-family:'Tajawal',sans-serif;background:linear-gradient(135deg,#f8fafc,#e2e8f0,#f8fafc);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+        .card{background:#fff;border:1px solid #e2e8f0;border-radius:24px;padding:48px;width:100%;max-width:580px;box-shadow:0 8px 30px rgba(0,0,0,.08)}
         .logo{text-align:center;margin-bottom:32px}
         .logo h1{font-size:34px;font-weight:800;background:linear-gradient(135deg,#6366f1,#8b5cf6,#a78bfa);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:6px}
-        .logo p{color:#94a3b8;font-size:15px}
+        .logo p{color:#64748b;font-size:15px}
 
         /* Steps indicator */
         .steps{display:flex;justify-content:center;gap:8px;margin-bottom:32px}
-        .step-dot{width:40px;height:5px;border-radius:3px;background:rgba(255,255,255,.08);transition:.3s}
+        .step-dot{width:40px;height:5px;border-radius:3px;background:#e2e8f0;transition:.3s}
         .step-dot.done{background:#22c55e}
         .step-dot.active{background:linear-gradient(90deg,#6366f1,#a78bfa);width:60px}
 
-        .step-label{text-align:center;color:#94a3b8;font-size:14px;margin-bottom:24px;font-weight:500}
-        .step-label span{color:#a78bfa;font-weight:700}
+        .step-label{text-align:center;color:#64748b;font-size:14px;margin-bottom:24px;font-weight:500}
+        .step-label span{color:#6366f1;font-weight:700}
 
         .form-group{margin-bottom:18px}
-        .form-group label{display:block;color:#cbd5e1;font-size:13px;font-weight:600;margin-bottom:7px}
-        .form-group input,.form-group select{width:100%;padding:13px 16px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;color:#f1f5f9;font-family:'Tajawal',sans-serif;font-size:14px;outline:none;transition:.3s}
-        .form-group input:focus{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.18)}
-        .form-group input::placeholder{color:#64748b}
+        .form-group label{display:block;color:#475569;font-size:13px;font-weight:600;margin-bottom:7px}
+        .form-group input,.form-group select{width:100%;padding:13px 16px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;color:#0f172a;font-family:'Tajawal',sans-serif;font-size:14px;outline:none;transition:.3s}
+        .form-group input:focus{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.12)}
+        .form-group input::placeholder{color:#94a3b8}
         .form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 
         .btn{width:100%;padding:15px;background:linear-gradient(135deg,#6366f1,#7c3aed);color:#fff;border:none;border-radius:12px;font-family:'Tajawal',sans-serif;font-size:16px;font-weight:700;cursor:pointer;transition:.3s;margin-top:8px;display:flex;align-items:center;justify-content:center;gap:8px}
         .btn:hover{transform:translateY(-2px);box-shadow:0 10px 30px rgba(99,102,241,.35)}
-        .btn-outline{background:transparent;border:1px solid rgba(255,255,255,.15);color:#94a3b8;box-shadow:none}
-        .btn-outline:hover{border-color:#6366f1;color:#a78bfa;transform:none;box-shadow:none}
+        .btn-outline{background:#f1f5f9;border:1px solid #e2e8f0;color:#64748b;box-shadow:none}
+        .btn-outline:hover{border-color:#6366f1;color:#6366f1;transform:none;box-shadow:none}
         a.btn{text-decoration:none;text-align:center}
 
         .alert{padding:13px 16px;border-radius:10px;margin-bottom:18px;font-size:13px;display:flex;align-items:center;gap:8px}
-        .alert-danger{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25);color:#fca5a5}
-        .alert-success{background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.25);color:#86efac}
-        .alert-warning{background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.25);color:#fcd34d}
+        .alert-danger{background:#fef2f2;border:1px solid #fecaca;color:#991b1b}
+        .alert-success{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534}
+        .alert-warning{background:#fffbeb;border:1px solid #fde68a;color:#92400e}
 
         .success-icon{text-align:center;margin-bottom:20px}
         .success-icon i{font-size:56px;color:#22c55e}
 
-        .info-box{background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.18);border-radius:12px;padding:16px;margin:20px 0}
-        .info-box p{color:#c4b5fd;font-size:13px;margin-bottom:5px;display:flex;align-items:center;gap:6px}
+        .info-box{background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:16px;margin:20px 0}
+        .info-box p{color:#1e40af;font-size:13px;margin-bottom:5px;display:flex;align-items:center;gap:6px}
         .info-box p:last-child{margin-bottom:0}
-        .info-box strong{color:#e0e7ff}
+        .info-box strong{color:#1e3a5f}
 
         .check-list{list-style:none;margin:16px 0}
-        .check-list li{display:flex;align-items:center;gap:8px;padding:8px 0;color:#94a3b8;font-size:13px}
+        .check-list li{display:flex;align-items:center;gap:8px;padding:8px 0;color:#475569;font-size:13px}
         .check-list li i.fa-check-circle{color:#22c55e}
         .check-list li i.fa-times-circle{color:#ef4444}
 
@@ -354,9 +354,9 @@ function getTableSQL() {
 <div class="card">
     <div class="logo">
         <div style="display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:12px">
-            <img src="assets/img/waves-logo.png" alt="Waves" style="height:44px;filter:brightness(0) invert(1);opacity:.9">
-            <span style="color:rgba(255,255,255,.2);font-size:18px">&times;</span>
-            <img src="assets/img/details-logo.png" alt="Details" style="height:44px;filter:brightness(0) invert(1);opacity:.9">
+            <img src="assets/img/waves-logo.png" alt="Waves" style="height:44px;opacity:.9">
+            <span style="color:#cbd5e1;font-size:18px">&times;</span>
+            <img src="assets/img/details-logo.png" alt="Details" style="height:44px;opacity:.9">
         </div>
         <p>Project Tracking Platform / منصة متابعة المشروع</p>
     </div>

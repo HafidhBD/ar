@@ -407,7 +407,8 @@ require_once 'includes/header.php';
         </form>
     </div>
 </div>
-<script>initFileUpload('taskDropArea','taskFileInput','taskFileList');</script>
-<?php endif; ?>
+<?php
+$extraJS = "<script>initFileUpload('taskDropArea','taskFileInput','taskFileList');</script>";
+endif; ?>
 
 <?php require_once 'includes/footer.php'; ?>
