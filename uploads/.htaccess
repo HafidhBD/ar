@@ -1,0 +1,12 @@
+Options -Indexes
+
+# Block PHP execution in uploads directory
+<FilesMatch "\.(php|php5|phtml|phar|cgi|pl|py|sh|bash)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Additional security
+<IfModule mod_php.c>
+    php_flag engine off
+</IfModule>
