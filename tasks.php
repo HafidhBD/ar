@@ -220,14 +220,19 @@ require_once 'includes/header.php';
                     </td>
                     <td><?= $task['category'] ? '<span class="badge status-archived">' . e($task['category']) . '</span>' : '-' ?></td>
                     <td>
+                        <?php
+                            $curSt = getStatusBySlug($task['status']);
+                            $stColor = $curSt ? $curSt['color'] : '#64748b';
+                            $stBg = $curSt ? $curSt['bg_color'] : '#f1f5f9';
+                        ?>
                         <?php if (isWavesSide()): ?>
                             <form method="POST" style="display:inline">
                                 <?= csrfField() ?>
                                 <input type="hidden" name="action" value="update_status">
                                 <input type="hidden" name="task_id" value="<?= $task['id'] ?>">
-                                <select name="status" class="filter-select" style="min-width:130px;font-size:12px;padding:5px 8px;padding-inline-start:28px" onchange="this.form.submit()">
+                                <select name="status" class="status-select" style="background:<?= e($stBg) ?>;color:<?= e($stColor) ?>;border:1px solid <?= e($stColor) ?>30;font-weight:700;font-size:12px;padding:6px 12px;border-radius:20px;cursor:pointer;min-width:130px;appearance:none;-webkit-appearance:none;text-align:center;font-family:inherit" onchange="this.form.submit()">
                                     <?php foreach ($allDbStatuses as $st): ?>
-                                        <option value="<?= e($st['slug']) ?>" <?= $task['status'] === $st['slug'] ? 'selected' : '' ?>><?= e(getStatusLabel($st['slug'])) ?></option>
+                                        <option value="<?= e($st['slug']) ?>" <?= $task['status'] === $st['slug'] ? 'selected' : '' ?> data-color="<?= e($st['color']) ?>" data-bg="<?= e($st['bg_color']) ?>"><?= e(getStatusLabel($st['slug'])) ?></option>
                                     <?php endforeach; ?>
                                 </select>
                             </form>
@@ -423,4 +428,19 @@ require_once 'includes/header.php';
 $extraJS = "<script>initFileUpload('taskDropArea','taskFileInput','taskFileList');</script>";
 endif; ?>
 
+<script>
+// Live color update for status selects
+document.querySelectorAll('.status-select').forEach(function(sel){
+    sel.addEventListener('change', function(){
+        var opt = this.options[this.selectedIndex];
+        var c = opt.getAttribute('data-color');
+        var bg = opt.getAttribute('data-bg');
+        if(c && bg){
+            this.style.background = bg;
+            this.style.color = c;
+            this.style.borderColor = c + '30';
+        }
+    });
+});
+</script>
 <?php require_once 'includes/footer.php'; ?>
