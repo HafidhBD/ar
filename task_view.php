@@ -266,9 +266,6 @@ require_once 'includes/header.php';
                                 <div class="comment-content">
                                     <div class="comment-header">
                                         <span class="comment-author"><?= e($c['author_name']) ?></span>
-                                        <span class="comment-role <?= in_array($c['author_role'], ['admin','project_manager']) ? 'manager' : 'client' ?>">
-                                            <?= e(getRoleLabel($c['author_role'])) ?>
-                                        </span>
                                         <span class="comment-time"><?= timeAgo($c['created_at']) ?></span>
                                     </div>
                                     <div class="comment-text"><?= nl2br(e($c['comment'])) ?></div>

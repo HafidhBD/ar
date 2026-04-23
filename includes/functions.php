@@ -244,11 +244,29 @@ function notifyUsers($userIds, $title, $message, $link = null, $type = 'info') {
 
 /**
  * Get users to notify for a task event
+ * Checks task-specific notify_users setting if available
  */
 function getTaskNotifyUsers($taskId, $excludeUserId = null) {
     global $pdo;
-    // Get all admins and project managers, plus the client users
-    $stmt = $pdo->query("SELECT id FROM users WHERE (role IN ('admin', 'project_manager', 'client')) AND is_active = 1");
+
+    // Check if task has specific notification recipients
+    try {
+        $stmt = $pdo->prepare("SELECT notify_users FROM tasks WHERE id = ?");
+        $stmt->execute([$taskId]);
+        $task = $stmt->fetch();
+        if ($task && !empty($task['notify_users'])) {
+            $users = array_map('intval', explode(',', $task['notify_users']));
+            if ($excludeUserId) {
+                $users = array_filter($users, fn($u) => $u != $excludeUserId);
+            }
+            return array_values($users);
+        }
+    } catch (Exception $e) {
+        // Column might not exist yet, fall through to default
+    }
+
+    // Default: all active users
+    $stmt = $pdo->query("SELECT id FROM users WHERE is_active = 1");
     $users = $stmt->fetchAll(PDO::FETCH_COLUMN);
     if ($excludeUserId) {
         $users = array_filter($users, fn($u) => $u != $excludeUserId);

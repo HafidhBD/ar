@@ -196,6 +196,7 @@ function getTableSQL() {
             `client_notes` TEXT DEFAULT NULL,
             `revision_count` INT DEFAULT 0,
             `estimated_hours` DECIMAL(6,2) DEFAULT NULL,
+            `notify_users` TEXT DEFAULT NULL,
             `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
             `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE CASCADE,

@@ -6,6 +6,11 @@ $pageTitle = $lang['tasks'];
 $msg = '';
 $msgType = '';
 
+// Auto-migrate: add notify_users column if missing
+try { $pdo->query("SELECT notify_users FROM tasks LIMIT 1"); } catch (Exception $e) {
+    try { $pdo->exec("ALTER TABLE tasks ADD COLUMN notify_users TEXT DEFAULT NULL AFTER estimated_hours"); } catch (Exception $e2) {}
+}
+
 // Handle POST actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     requireCsrf();
@@ -24,12 +29,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $clientNotes = trim($_POST['client_notes'] ?? '');
         $estimatedHours = $_POST['estimated_hours'] ?: null;
 
+        // Notification recipients
+        $notifyUserIds = $_POST['notify_users'] ?? [];
+        $notifyUsersStr = !empty($notifyUserIds) ? implode(',', array_map('intval', $notifyUserIds)) : null;
+
         if (empty($title)) {
             $msg = $lang['required_fields'];
             $msgType = 'danger';
         } else {
-            $stmt = $pdo->prepare("INSERT INTO tasks (title, description, category, status, priority, start_date, due_date, progress, created_by, internal_notes, client_notes, estimated_hours) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)");
-            $stmt->execute([$title, $description, $category, $status, $priority, $startDate, $dueDate, $progress, getUserId(), $internalNotes, $clientNotes, $estimatedHours]);
+            $stmt = $pdo->prepare("INSERT INTO tasks (title, description, category, status, priority, start_date, due_date, progress, created_by, internal_notes, client_notes, estimated_hours, notify_users) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)");
+            $stmt->execute([$title, $description, $category, $status, $priority, $startDate, $dueDate, $progress, getUserId(), $internalNotes, $clientNotes, $estimatedHours, $notifyUsersStr]);
             $taskId = $pdo->lastInsertId();
 
             // Handle file uploads
@@ -124,6 +133,9 @@ $tasks = $stmt->fetchAll();
 
 // Get distinct categories for filter
 $categories = $pdo->query("SELECT DISTINCT category FROM tasks WHERE category IS NOT NULL AND category != '' ORDER BY category")->fetchAll(PDO::FETCH_COLUMN);
+
+// Get all active users for notification selector
+$allUsers = $pdo->query("SELECT id, name, role FROM users WHERE is_active = 1 ORDER BY role, name")->fetchAll();
 
 // All statuses for the kanban view
 $allStatuses = ['new', 'in_progress', 'delivered', 'pending_review', 'needs_revision', 'completed'];
@@ -389,6 +401,18 @@ require_once 'includes/header.php';
                 <div class="form-group">
                     <label class="form-label"><?= e($lang['task_internal_notes']) ?></label>
                     <textarea name="internal_notes" class="form-control" rows="2" placeholder="<?= e($lang['task_internal_notes']) ?>"></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label"><i class="fas fa-bell"></i> <?= e($lang['lang_code'] === 'ar' ? 'إرسال إشعارات إلى' : 'Send notifications to') ?></label>
+                    <div style="display:flex;flex-wrap:wrap;gap:10px;padding:12px;background:#f8fafc;border:1px solid var(--border);border-radius:var(--radius)">
+                        <?php foreach ($allUsers as $u): ?>
+                            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;padding:4px 8px;border-radius:6px;background:#fff;border:1px solid var(--border)">
+                                <input type="checkbox" name="notify_users[]" value="<?= $u['id'] ?>" checked style="accent-color:#6366f1">
+                                <?= e($u['name']) ?>
+                            </label>
+                        <?php endforeach; ?>
+                    </div>
+                    <div class="form-text"><?= e($lang['lang_code'] === 'ar' ? 'ألغِ التحديد لاستثناء مستخدم من الإشعارات' : 'Uncheck to exclude a user from notifications') ?></div>
                 </div>
                 <div class="form-group">
                     <label class="form-label"><?= e($lang['files']) ?></label>

@@ -227,32 +227,46 @@ function smtpRead($socket) {
 }
 
 /**
- * Build HTML email template
+ * Build HTML email template with task details
  */
-function buildEmailTemplate($title, $bodyContent, $actionUrl = '', $actionText = '') {
+function buildEmailTemplate($title, $bodyContent, $actionUrl = '', $actionText = '', $taskData = []) {
     $siteName = getSetting('site_title', 'Waves Platform');
     $lang = getLang();
     $dir = $lang['direction'] ?? 'rtl';
 
     $actionButton = '';
     if ($actionUrl && $actionText) {
-        $actionButton = '<div style="text-align:center;margin:30px 0;">
-            <a href="' . e($actionUrl) . '" style="background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:15px;display:inline-block;">' . e($actionText) . '</a>
+        $actionButton = '<div style="text-align:center;margin:28px 0 8px;">
+            <a href="' . e($actionUrl) . '" style="background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;padding:14px 36px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:15px;display:inline-block;">' . e($actionText) . '</a>
         </div>';
+    }
+
+    // Task details table
+    $taskTable = '';
+    if (!empty($taskData)) {
+        $rows = '';
+        foreach ($taskData as $label => $value) {
+            if ($value === null || $value === '') continue;
+            $rows .= '<tr><td style="padding:10px 14px;font-weight:600;color:#64748b;font-size:13px;border-bottom:1px solid #f1f5f9;white-space:nowrap;width:120px">' . e($label) . '</td><td style="padding:10px 14px;color:#1e293b;font-size:14px;border-bottom:1px solid #f1f5f9">' . e($value) . '</td></tr>';
+        }
+        if ($rows) {
+            $taskTable = '<table style="width:100%;border-collapse:collapse;margin:20px 0;background:#f8fafc;border-radius:8px;overflow:hidden;border:1px solid #e2e8f0">' . $rows . '</table>';
+        }
     }
 
     return '<!DOCTYPE html><html dir="' . $dir . '"><head><meta charset="UTF-8"></head>
     <body style="margin:0;padding:0;background:#f1f5f9;font-family:Tajawal,Arial,sans-serif;">
-    <div style="max-width:600px;margin:30px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
-        <div style="background:linear-gradient(135deg,#6366f1,#4f46e5);padding:28px;text-align:center;">
-            <h1 style="color:#fff;margin:0;font-size:22px;">' . e($siteName) . '</h1>
+    <div style="max-width:600px;margin:30px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,0.06);">
+        <div style="background:linear-gradient(135deg,#6366f1,#4f46e5);padding:28px 32px;text-align:center;">
+            <h1 style="color:#fff;margin:0;font-size:20px;font-weight:700;">' . e($siteName) . '</h1>
         </div>
         <div style="padding:32px;">
-            <h2 style="color:#1e293b;font-size:18px;margin-bottom:16px;">' . e($title) . '</h2>
-            <div style="color:#475569;font-size:15px;line-height:1.8;">' . $bodyContent . '</div>
+            <h2 style="color:#1e293b;font-size:17px;margin:0 0 16px;font-weight:700;">' . e($title) . '</h2>
+            <div style="color:#475569;font-size:14px;line-height:1.9;">' . $bodyContent . '</div>
+            ' . $taskTable . '
             ' . $actionButton . '
         </div>
-        <div style="padding:20px;text-align:center;background:#f8fafc;color:#94a3b8;font-size:12px;border-top:1px solid #e2e8f0;">
+        <div style="padding:18px 32px;text-align:center;background:#f8fafc;color:#94a3b8;font-size:11px;border-top:1px solid #e2e8f0;">
             ' . e($lang['email_footer'] ?? 'Waves Platform') . '
         </div>
     </div></body></html>';
@@ -261,7 +275,7 @@ function buildEmailTemplate($title, $bodyContent, $actionUrl = '', $actionText =
 /**
  * Send notification email to a user
  */
-function sendNotificationEmail($userId, $subject, $title, $bodyContent, $actionUrl = '', $actionText = '') {
+function sendNotificationEmail($userId, $subject, $title, $bodyContent, $actionUrl = '', $actionText = '', $taskData = []) {
     global $pdo;
     try {
         $stmt = $pdo->prepare("SELECT email, name FROM users WHERE id = ? AND is_active = 1");
@@ -269,7 +283,7 @@ function sendNotificationEmail($userId, $subject, $title, $bodyContent, $actionU
         $user = $stmt->fetch();
         if (!$user) return false;
 
-        $html = buildEmailTemplate($title, $bodyContent, $actionUrl, $actionText);
+        $html = buildEmailTemplate($title, $bodyContent, $actionUrl, $actionText, $taskData);
 
         // Log email
         try {
@@ -292,20 +306,30 @@ function sendNotificationEmail($userId, $subject, $title, $bodyContent, $actionU
 }
 
 /**
- * Notify users about a task event
+ * Notify users about a task event with detailed info
  */
 function notifyTaskEvent($taskId, $event, $excludeUserId = null) {
     global $pdo;
     $lang = getLang();
 
     try {
-        $stmt = $pdo->prepare("SELECT * FROM tasks WHERE id = ?");
+        $stmt = $pdo->prepare("SELECT t.*, u.name as creator_name FROM tasks t LEFT JOIN users u ON t.created_by=u.id WHERE t.id = ?");
         $stmt->execute([$taskId]);
         $task = $stmt->fetch();
         if (!$task) return;
 
         $users = getTaskNotifyUsers($taskId, $excludeUserId);
         $baseUrl = getBaseUrl();
+        $link = $baseUrl . "/task_view.php?id={$taskId}";
+
+        // Map event to specific subject and detect delivered/review
+        if ($event === 'status_changed') {
+            $newStatus = $task['status'];
+            if ($newStatus === 'delivered') $event = 'delivered';
+            elseif ($newStatus === 'pending_review') $event = 'review';
+            elseif ($newStatus === 'completed') $event = 'completed';
+            elseif ($newStatus === 'needs_revision') $event = 'needs_revision';
+        }
 
         $subjects = [
             'created' => str_replace(':title', $task['title'], $lang['email_new_task']),
@@ -315,15 +339,43 @@ function notifyTaskEvent($taskId, $event, $excludeUserId = null) {
             'status_changed' => str_replace(':title', $task['title'], $lang['email_status_changed']),
             'delivered' => str_replace(':title', $task['title'], $lang['email_task_delivered']),
             'review' => str_replace(':title', $task['title'], $lang['email_review_needed']),
+            'needs_revision' => str_replace(':title', $task['title'], $lang['email_status_changed']),
             'completed' => str_replace(':title', $task['title'], $lang['email_task_completed']),
         ];
 
         $subject = $subjects[$event] ?? $subjects['updated'];
-        $link = $baseUrl . "/task_view.php?id={$taskId}";
+
+        // Build body text per event
+        $bodyTexts = [
+            'created' => $lang['lang_code'] === 'ar' ? 'تم إنشاء مهمة جديدة، يرجى الاطلاع على التفاصيل.' : 'A new task has been created. Please review the details.',
+            'updated' => $lang['lang_code'] === 'ar' ? 'تم تحديث المهمة التالية.' : 'The following task has been updated.',
+            'comment' => $lang['lang_code'] === 'ar' ? 'تم إضافة تعليق جديد على المهمة.' : 'A new comment has been added to the task.',
+            'file' => $lang['lang_code'] === 'ar' ? 'تم رفع ملفات جديدة على المهمة.' : 'New files have been uploaded to the task.',
+            'status_changed' => $lang['lang_code'] === 'ar' ? 'تم تغيير حالة المهمة.' : 'Task status has been changed.',
+            'delivered' => $lang['lang_code'] === 'ar' ? 'تم تسليم المهمة وهي جاهزة للمراجعة.' : 'The task has been delivered and is ready for review.',
+            'review' => $lang['lang_code'] === 'ar' ? 'المهمة بانتظار مراجعتك.' : 'The task is waiting for your review.',
+            'needs_revision' => $lang['lang_code'] === 'ar' ? 'المهمة تحتاج تعديل، يرجى مراجعة الملاحظات.' : 'The task needs revision. Please review the notes.',
+            'completed' => $lang['lang_code'] === 'ar' ? 'تم إكمال المهمة بنجاح.' : 'The task has been completed successfully.',
+        ];
+        $bodyText = '<p>' . ($bodyTexts[$event] ?? $bodyTexts['updated']) . '</p>';
+
+        // Build task details for email
+        $isAr = $lang['lang_code'] === 'ar';
+        $taskData = [
+            ($isAr ? 'المهمة' : 'Task') => '#' . $task['id'] . ' - ' . $task['title'],
+            ($isAr ? 'الحالة' : 'Status') => getStatusLabel($task['status']),
+            ($isAr ? 'الأولوية' : 'Priority') => getPriorityLabel($task['priority']),
+            ($isAr ? 'التقدم' : 'Progress') => $task['progress'] . '%',
+            ($isAr ? 'تاريخ التسليم' : 'Due Date') => $task['due_date'] ? formatDate($task['due_date']) : null,
+            ($isAr ? 'أنشأها' : 'Created By') => $task['creator_name'] ?? null,
+        ];
+
+        // Notification type
+        $notifType = in_array($event, ['delivered', 'review', 'needs_revision']) ? 'warning' : 'task';
 
         foreach ($users as $uid) {
-            createNotification($uid, $subject, $task['title'], "task_view.php?id={$taskId}", 'task');
-            sendNotificationEmail($uid, $subject, $subject, '<p>' . e($task['title']) . '</p>', $link, $lang['view_task']);
+            createNotification($uid, $subject, $task['title'], "task_view.php?id={$taskId}", $notifType);
+            sendNotificationEmail($uid, $subject, $subject, $bodyText, $link, $lang['view_task'], $taskData);
         }
     } catch (Exception $e) {
         // Silently fail
