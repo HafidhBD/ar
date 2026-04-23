@@ -162,16 +162,20 @@ function sendSmtpEmail($host, $port, $user, $pass, $encryption, $fromEmail, $fro
             return false;
         }
 
-        // Step 9: Send message
-        $message = "From: {$fromName} <{$fromEmail}>\r\n";
+        // Step 9: Send message with proper headers for deliverability
+        $msgId = uniqid('waves_') . '.' . time() . '@' . preg_replace('/^www\./', '', $_SERVER['HTTP_HOST'] ?? 'waves-pm.com');
+        $message = "From: =?UTF-8?B?" . base64_encode($fromName) . "?= <{$fromEmail}>\r\n";
         $message .= "To: {$to}\r\n";
+        $message .= "Reply-To: {$fromEmail}\r\n";
         $message .= "Subject: =?UTF-8?B?" . base64_encode($subject) . "?=\r\n";
+        $message .= "Date: " . date('r') . "\r\n";
+        $message .= "Message-ID: <{$msgId}>\r\n";
         $message .= "MIME-Version: 1.0\r\n";
         $message .= "Content-Type: " . ($isHtml ? "text/html" : "text/plain") . "; charset=UTF-8\r\n";
-        $message .= "Date: " . date('r') . "\r\n";
-        $message .= "Message-ID: <" . uniqid() . "@" . (gethostname() ?: 'waves') . ">\r\n";
+        $message .= "Content-Transfer-Encoding: base64\r\n";
+        $message .= "X-Mailer: Waves-Platform/1.0\r\n";
         $message .= "\r\n";
-        $message .= $body . "\r\n.\r\n";
+        $message .= chunk_split(base64_encode($body)) . "\r\n.\r\n";
 
         fwrite($socket, $message);
         $resp = smtpRead($socket);
