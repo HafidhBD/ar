@@ -365,7 +365,6 @@ function notifyTaskEvent($taskId, $event, $excludeUserId = null) {
             ($isAr ? 'المهمة' : 'Task') => '#' . $task['id'] . ' - ' . $task['title'],
             ($isAr ? 'الحالة' : 'Status') => getStatusLabel($task['status']),
             ($isAr ? 'الأولوية' : 'Priority') => getPriorityLabel($task['priority']),
-            ($isAr ? 'التقدم' : 'Progress') => $task['progress'] . '%',
             ($isAr ? 'تاريخ التسليم' : 'Due Date') => $task['due_date'] ? formatDate($task['due_date']) : null,
             ($isAr ? 'أنشأها' : 'Created By') => $task['creator_name'] ?? null,
         ];

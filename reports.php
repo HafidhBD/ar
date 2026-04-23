@@ -43,10 +43,10 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     header('Content-Disposition: attachment; filename=tasks_report_' . date('Y-m-d') . '.csv');
     $output = fopen('php://output', 'w');
     fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF)); // BOM for Excel UTF-8
-    fputcsv($output, ['ID', 'Title', 'Status', 'Priority', 'Category', 'Start Date', 'Due Date', 'Progress', 'Revisions', 'Created']);
-    $allTasks = $pdo->query("SELECT * FROM tasks WHERE status!='archived' ORDER BY id")->fetchAll();
+    fputcsv($output, ['ID', 'Title', 'Status', 'Priority', 'Category', 'Start Date', 'Due Date', 'Revisions', 'Created']);
+    $allTasks = $pdo->query("SELECT * FROM tasks ORDER BY id")->fetchAll();
     foreach ($allTasks as $t) {
-        fputcsv($output, [$t['id'], $t['title'], $t['status'], $t['priority'], $t['category'], $t['start_date'], $t['due_date'], $t['progress'].'%', $t['revision_count'], $t['created_at']]);
+        fputcsv($output, [$t['id'], $t['title'], getStatusLabel($t['status']), getPriorityLabel($t['priority']), $t['category'], $t['start_date'], $t['due_date'], $t['revision_count'], $t['created_at']]);
     }
     fclose($output);
     exit;
@@ -102,14 +102,12 @@ require_once 'includes/header.php';
     <div class="card">
         <div class="card-header"><div class="card-title"><i class="fas fa-chart-pie"></i> <?= e($lang['tasks_by_status']) ?></div></div>
         <div class="card-body">
-            <?php
-            $allStatuses = ['new','in_progress','delivered','pending_review','needs_revision','completed'];
-            foreach ($allStatuses as $s):
-                $cnt = (int)($statusStats[$s] ?? 0);
+            <?php foreach (getAllStatuses() as $st):
+                $cnt = (int)($statusStats[$st['slug']] ?? 0);
                 $pct = $totalTasks > 0 ? round(($cnt / $totalTasks) * 100) : 0;
             ?>
             <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-                <span class="badge <?= getStatusClass($s) ?>" style="min-width:120px;justify-content:center"><?= getStatusLabel($s) ?></span>
+                <span class="badge" style="<?= getStatusStyle($st['slug']) ?>;min-width:120px;justify-content:center"><?= e(getStatusLabel($st['slug'])) ?></span>
                 <div class="progress-bar" style="flex:1"><div class="progress-fill" style="width:<?= $pct ?>%"></div></div>
                 <span style="font-weight:700;min-width:50px;text-align:center"><?= $cnt ?></span>
                 <span class="text-muted fs-sm" style="min-width:40px"><?= $pct ?>%</span>
@@ -153,7 +151,7 @@ require_once 'includes/header.php';
                 <tr onclick="window.location='task_view.php?id=<?= $t['id'] ?>'" style="cursor:pointer">
                     <td>#<?= $t['id'] ?></td>
                     <td><strong><?= e($t['title']) ?></strong></td>
-                    <td><span class="badge <?= getStatusClass($t['status']) ?>"><?= getStatusLabel($t['status']) ?></span></td>
+                    <td><span class="badge" style="<?= getStatusStyle($t['status']) ?>"><?= getStatusLabel($t['status']) ?></span></td>
                     <td><span class="badge <?= getPriorityClass($t['priority']) ?>"><?= getPriorityLabel($t['priority']) ?></span></td>
                     <td><?= formatDate($t['due_date']) ?></td>
                     <td class="text-danger fw-bold"><?= abs((int)((strtotime($t['due_date']) - time()) / 86400)) ?> <?= e(getCurrentLanguage() === 'ar' ? 'يوم' : 'days') ?></td>

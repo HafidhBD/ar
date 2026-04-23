@@ -81,15 +81,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $newStatus = $_POST['status'] ?? $task['status'];
         $newPriority = $_POST['priority'] ?? $task['priority'];
         $newDueDate = $_POST['due_date'] ?: null;
-        $newProgress = (int)($_POST['progress'] ?? $task['progress']);
-
         $oldStatus = $task['status'];
-        $completedDate = ($newStatus === 'completed' && $oldStatus !== 'completed') ? date('Y-m-d H:i:s') : $task['completed_date'];
+        $completedDate = (isCompletedStatus($newStatus) && !isCompletedStatus($oldStatus)) ? date('Y-m-d H:i:s') : $task['completed_date'];
         $deliveryDate = ($newStatus === 'delivered' && $oldStatus !== 'delivered') ? date('Y-m-d H:i:s') : $task['delivery_date'];
         $revisionCount = ($newStatus === 'needs_revision' && $oldStatus !== 'needs_revision') ? $task['revision_count'] + 1 : $task['revision_count'];
 
-        $pdo->prepare("UPDATE tasks SET status=?, priority=?, due_date=?, progress=?, completed_date=?, delivery_date=?, revision_count=? WHERE id=?")
-            ->execute([$newStatus, $newPriority, $newDueDate, $newProgress, $completedDate, $deliveryDate, $revisionCount, $taskId]);
+        $pdo->prepare("UPDATE tasks SET status=?, priority=?, due_date=?, completed_date=?, delivery_date=?, revision_count=? WHERE id=?")
+            ->execute([$newStatus, $newPriority, $newDueDate, $completedDate, $deliveryDate, $revisionCount, $taskId]);
 
         if ($oldStatus !== $newStatus) {
             logTaskStatusChange($taskId, getUserId(), $oldStatus, $newStatus);
@@ -173,7 +171,7 @@ require_once 'includes/header.php';
             <div class="card-header">
                 <div class="card-title" style="font-size:17px"><?= e($task['title']) ?></div>
                 <div class="btn-group">
-                    <span class="badge <?= getStatusClass($task['status']) ?>" style="font-size:13px;padding:6px 14px"><?= getStatusLabel($task['status']) ?></span>
+                    <span class="badge" style="<?= getStatusStyle($task['status']) ?>;font-size:13px;padding:6px 14px"><?= getStatusLabel($task['status']) ?></span>
                     <span class="badge <?= getPriorityClass($task['priority']) ?>" style="font-size:13px;padding:6px 14px"><?= getPriorityLabel($task['priority']) ?></span>
                 </div>
             </div>
@@ -193,7 +191,6 @@ require_once 'includes/header.php';
                     <?php if ($task['completed_date']): ?>
                     <div class="detail-item"><div class="detail-label"><?= e($lang['status_completed']) ?></div><div class="detail-value"><?= formatDateTime($task['completed_date']) ?></div></div>
                     <?php endif; ?>
-                    <div class="detail-item"><div class="detail-label"><?= e($lang['task_progress']) ?></div><div class="detail-value"><?= $task['progress'] ?>%</div></div>
                     <div class="detail-item"><div class="detail-label"><?= e($lang['task_revision_count']) ?></div><div class="detail-value"><?= $task['revision_count'] ?></div></div>
                     <?php if ($task['category']): ?>
                     <div class="detail-item"><div class="detail-label"><?= e($lang['task_category']) ?></div><div class="detail-value"><?= e($task['category']) ?></div></div>
@@ -320,8 +317,8 @@ require_once 'includes/header.php';
                     <div class="form-group">
                         <label class="form-label"><?= e($lang['status']) ?></label>
                         <select name="status" class="form-control">
-                            <?php foreach (['new','in_progress','delivered','pending_review','needs_revision','completed'] as $s): ?>
-                                <option value="<?= $s ?>" <?= $task['status'] === $s ? 'selected' : '' ?>><?= getStatusLabel($s) ?></option>
+                            <?php foreach (getAllStatuses() as $st): ?>
+                                <option value="<?= e($st['slug']) ?>" <?= $task['status'] === $st['slug'] ? 'selected' : '' ?>><?= e(getStatusLabel($st['slug'])) ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
@@ -336,10 +333,6 @@ require_once 'includes/header.php';
                     <div class="form-group">
                         <label class="form-label"><?= e($lang['task_due_date']) ?></label>
                         <input type="date" name="due_date" class="form-control" value="<?= $task['due_date'] ?? '' ?>">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label"><?= e($lang['task_progress']) ?> (%)</label>
-                        <input type="number" name="progress" class="form-control" min="0" max="100" value="<?= $task['progress'] ?>">
                     </div>
                     <button type="submit" class="btn btn-primary w-100"><i class="fas fa-save"></i> <?= e($lang['update']) ?></button>
                 </div>
@@ -376,10 +369,10 @@ require_once 'includes/header.php';
                                 <div style="font-size:12px;font-weight:600"><?= e($h['user_name'] ?? 'System') ?></div>
                                 <div class="text-muted" style="font-size:11px">
                                     <?php if ($h['old_status']): ?>
-                                        <span class="badge <?= getStatusClass($h['old_status']) ?>" style="font-size:10px;padding:1px 6px"><?= getStatusLabel($h['old_status']) ?></span>
+                                        <span class="badge" style="<?= getStatusStyle($h['old_status']) ?>;font-size:10px;padding:1px 6px"><?= getStatusLabel($h['old_status']) ?></span>
                                         <i class="fas fa-arrow-left" style="font-size:8px;margin:0 4px"></i>
                                     <?php endif; ?>
-                                    <span class="badge <?= getStatusClass($h['new_status']) ?>" style="font-size:10px;padding:1px 6px"><?= getStatusLabel($h['new_status']) ?></span>
+                                    <span class="badge" style="<?= getStatusStyle($h['new_status']) ?>;font-size:10px;padding:1px 6px"><?= getStatusLabel($h['new_status']) ?></span>
                                 </div>
                             </div>
                             <div class="notif-time"><?= timeAgo($h['created_at']) ?></div>

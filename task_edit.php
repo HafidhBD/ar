@@ -25,7 +25,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $priority = $_POST['priority'] ?? $task['priority'];
     $startDate = $_POST['start_date'] ?: null;
     $dueDate = $_POST['due_date'] ?: null;
-    $progress = (int)($_POST['progress'] ?? 0);
     $internalNotes = trim($_POST['internal_notes'] ?? '');
     $clientNotes = trim($_POST['client_notes'] ?? '');
     $estimatedHours = $_POST['estimated_hours'] ?: null;
@@ -35,12 +34,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $msgType = 'danger';
     } else {
         $oldStatus = $task['status'];
-        $completedDate = ($status === 'completed' && $oldStatus !== 'completed') ? date('Y-m-d H:i:s') : $task['completed_date'];
+        $completedDate = (isCompletedStatus($status) && !isCompletedStatus($oldStatus)) ? date('Y-m-d H:i:s') : $task['completed_date'];
         $deliveryDate = ($status === 'delivered' && $oldStatus !== 'delivered') ? date('Y-m-d H:i:s') : $task['delivery_date'];
         $revisionCount = ($status === 'needs_revision' && $oldStatus !== 'needs_revision') ? $task['revision_count'] + 1 : $task['revision_count'];
 
-        $pdo->prepare("UPDATE tasks SET title=?, description=?, category=?, status=?, priority=?, start_date=?, due_date=?, progress=?, internal_notes=?, client_notes=?, estimated_hours=?, completed_date=?, delivery_date=?, revision_count=? WHERE id=?")
-            ->execute([$title, $description, $category, $status, $priority, $startDate, $dueDate, $progress, $internalNotes, $clientNotes, $estimatedHours, $completedDate, $deliveryDate, $revisionCount, $taskId]);
+        $pdo->prepare("UPDATE tasks SET title=?, description=?, category=?, status=?, priority=?, start_date=?, due_date=?, internal_notes=?, client_notes=?, estimated_hours=?, completed_date=?, delivery_date=?, revision_count=? WHERE id=?")
+            ->execute([$title, $description, $category, $status, $priority, $startDate, $dueDate, $internalNotes, $clientNotes, $estimatedHours, $completedDate, $deliveryDate, $revisionCount, $taskId]);
 
         if ($oldStatus !== $status) {
             logTaskStatusChange($taskId, getUserId(), $oldStatus, $status);
@@ -102,14 +101,10 @@ require_once 'includes/header.php';
                 <div class="form-group">
                     <label class="form-label"><?= e($lang['status']) ?></label>
                     <select name="status" class="form-control">
-                        <?php foreach (['new','in_progress','delivered','pending_review','needs_revision','completed','archived'] as $s): ?>
-                            <option value="<?= $s ?>" <?= $task['status'] === $s ? 'selected' : '' ?>><?= getStatusLabel($s) ?></option>
+                        <?php foreach (getAllStatuses() as $st): ?>
+                            <option value="<?= e($st['slug']) ?>" <?= $task['status'] === $st['slug'] ? 'selected' : '' ?>><?= e(getStatusLabel($st['slug'])) ?></option>
                         <?php endforeach; ?>
                     </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label"><?= e($lang['task_progress']) ?> (%)</label>
-                    <input type="number" name="progress" class="form-control" min="0" max="100" value="<?= $task['progress'] ?>">
                 </div>
             </div>
             <div class="form-row">
@@ -131,7 +126,7 @@ require_once 'includes/header.php';
                 <textarea name="internal_notes" class="form-control" rows="2"><?= e($task['internal_notes']) ?></textarea>
             </div>
             <div class="form-group">
-                <label class="form-label"><?= e($lang['task_progress']) ?> (<?= e($lang['task_revision_count']) ?>: <?= $task['estimated_hours'] ?? '0' ?>h)</label>
+                <label class="form-label"><?= e($lang['lang_code'] === 'ar' ? 'الساعات المقدرة' : 'Estimated Hours') ?></label>
                 <input type="number" name="estimated_hours" class="form-control" step="0.5" min="0" value="<?= $task['estimated_hours'] ?? '' ?>">
             </div>
         </div>

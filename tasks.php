@@ -24,7 +24,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $priority = $_POST['priority'] ?? 'medium';
         $startDate = $_POST['start_date'] ?: null;
         $dueDate = $_POST['due_date'] ?: null;
-        $progress = (int)($_POST['progress'] ?? 0);
         $internalNotes = trim($_POST['internal_notes'] ?? '');
         $clientNotes = trim($_POST['client_notes'] ?? '');
         $estimatedHours = $_POST['estimated_hours'] ?: null;
@@ -37,8 +36,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $msg = $lang['required_fields'];
             $msgType = 'danger';
         } else {
-            $stmt = $pdo->prepare("INSERT INTO tasks (title, description, category, status, priority, start_date, due_date, progress, created_by, internal_notes, client_notes, estimated_hours, notify_users) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)");
-            $stmt->execute([$title, $description, $category, $status, $priority, $startDate, $dueDate, $progress, getUserId(), $internalNotes, $clientNotes, $estimatedHours, $notifyUsersStr]);
+            $stmt = $pdo->prepare("INSERT INTO tasks (title, description, category, status, priority, start_date, due_date, created_by, internal_notes, client_notes, estimated_hours, notify_users) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)");
+            $stmt->execute([$title, $description, $category, $status, $priority, $startDate, $dueDate, getUserId(), $internalNotes, $clientNotes, $estimatedHours, $notifyUsersStr]);
             $taskId = $pdo->lastInsertId();
 
             // Handle file uploads
@@ -137,8 +136,9 @@ $categories = $pdo->query("SELECT DISTINCT category FROM tasks WHERE category IS
 // Get all active users for notification selector
 $allUsers = $pdo->query("SELECT id, name, role FROM users WHERE is_active = 1 ORDER BY role, name")->fetchAll();
 
-// All statuses for the kanban view
-$allStatuses = ['new', 'in_progress', 'delivered', 'pending_review', 'needs_revision', 'completed'];
+// All statuses from DB
+$allDbStatuses = getAllStatuses();
+$allStatuses = array_column($allDbStatuses, 'slug');
 
 require_once 'includes/header.php';
 ?>
@@ -157,8 +157,8 @@ require_once 'includes/header.php';
             </div>
             <select name="status" class="filter-select" onchange="this.form.submit()">
                 <option value=""><?= e($lang['all']) ?> <?= e($lang['status']) ?></option>
-                <?php foreach ($allStatuses as $s): ?>
-                    <option value="<?= $s ?>" <?= $filterStatus === $s ? 'selected' : '' ?>><?= getStatusLabel($s) ?></option>
+                <?php foreach ($allDbStatuses as $st): ?>
+                    <option value="<?= e($st['slug']) ?>" <?= $filterStatus === $st['slug'] ? 'selected' : '' ?>><?= e(getStatusLabel($st['slug'])) ?></option>
                 <?php endforeach; ?>
             </select>
             <select name="priority" class="filter-select" onchange="this.form.submit()">
@@ -204,7 +204,6 @@ require_once 'includes/header.php';
                     <th><?= e($lang['task_category']) ?></th>
                     <th><?= e($lang['status']) ?></th>
                     <th><?= e($lang['priority']) ?></th>
-                    <th><?= e($lang['task_progress']) ?></th>
                     <th><?= e($lang['task_due_date']) ?></th>
                     <th><?= e($lang['actions']) ?></th>
                 </tr>
@@ -227,20 +226,16 @@ require_once 'includes/header.php';
                                 <input type="hidden" name="action" value="update_status">
                                 <input type="hidden" name="task_id" value="<?= $task['id'] ?>">
                                 <select name="status" class="filter-select" style="min-width:130px;font-size:12px;padding:5px 8px;padding-inline-start:28px" onchange="this.form.submit()">
-                                    <?php foreach ($allStatuses as $s): ?>
-                                        <option value="<?= $s ?>" <?= $task['status'] === $s ? 'selected' : '' ?>><?= getStatusLabel($s) ?></option>
+                                    <?php foreach ($allDbStatuses as $st): ?>
+                                        <option value="<?= e($st['slug']) ?>" <?= $task['status'] === $st['slug'] ? 'selected' : '' ?>><?= e(getStatusLabel($st['slug'])) ?></option>
                                     <?php endforeach; ?>
                                 </select>
                             </form>
                         <?php else: ?>
-                            <span class="badge <?= getStatusClass($task['status']) ?>"><?= getStatusLabel($task['status']) ?></span>
+                            <span class="badge" style="<?= getStatusStyle($task['status']) ?>"><?= getStatusLabel($task['status']) ?></span>
                         <?php endif; ?>
                     </td>
                     <td><span class="badge <?= getPriorityClass($task['priority']) ?>"><?= getPriorityLabel($task['priority']) ?></span></td>
-                    <td>
-                        <div class="progress-bar" style="width:70px"><div class="progress-fill" style="width:<?= $task['progress'] ?>%"></div></div>
-                        <span class="progress-text"><?= $task['progress'] ?>%</span>
-                    </td>
                     <td>
                         <?= formatDate($task['due_date']) ?>
                         <?php if ($task['due_date'] && !in_array($task['status'], ['completed', 'archived'])): ?>
@@ -293,12 +288,8 @@ require_once 'includes/header.php';
         <?php if ($task['description']): ?>
             <p class="text-muted fs-sm" style="margin-bottom:12px"><?= e(mb_substr($task['description'], 0, 100)) ?></p>
         <?php endif; ?>
-        <div style="margin-bottom:10px">
-            <div class="progress-bar"><div class="progress-fill" style="width:<?= $task['progress'] ?>%"></div></div>
-            <span class="progress-text"><?= $task['progress'] ?>%</span>
-        </div>
         <div class="task-card-meta">
-            <span class="badge <?= getStatusClass($task['status']) ?>"><?= getStatusLabel($task['status']) ?></span>
+            <span class="badge" style="<?= getStatusStyle($task['status']) ?>"><?= getStatusLabel($task['status']) ?></span>
             <?php if ($task['category']): ?><span class="badge status-archived"><?= e($task['category']) ?></span><?php endif; ?>
             <?php if ($task['due_date']): ?><div class="task-meta-item"><i class="fas fa-calendar"></i> <?= formatDate($task['due_date']) ?></div><?php endif; ?>
         </div>
@@ -317,7 +308,7 @@ require_once 'includes/header.php';
     ?>
     <div class="kanban-column">
         <div class="kanban-header">
-            <h3><span class="badge <?= getStatusClass($ks) ?>"><?= getStatusLabel($ks) ?></span></h3>
+            <h3><span class="badge" style="<?= getStatusStyle($ks) ?>"><?= getStatusLabel($ks) ?></span></h3>
             <span class="kanban-count"><?= count($kanbanTasks) ?></span>
         </div>
         <div class="kanban-body">
@@ -385,13 +376,10 @@ require_once 'includes/header.php';
                     <div class="form-group">
                         <label class="form-label"><?= e($lang['status']) ?></label>
                         <select name="status" class="form-control">
-                            <option value="new"><?= e($lang['status_new']) ?></option>
-                            <option value="in_progress"><?= e($lang['status_in_progress']) ?></option>
+                            <?php foreach ($allDbStatuses as $st): ?>
+                                <option value="<?= e($st['slug']) ?>" <?= $st['is_default'] ? 'selected' : '' ?>><?= e(getStatusLabel($st['slug'])) ?></option>
+                            <?php endforeach; ?>
                         </select>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label"><?= e($lang['task_progress']) ?> (%)</label>
-                        <input type="number" name="progress" class="form-control" min="0" max="100" value="0">
                     </div>
                 </div>
                 <div class="form-group">

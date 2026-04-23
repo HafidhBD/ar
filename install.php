@@ -72,6 +72,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmtIns->execute([$k, $v]);
             }
 
+            // Insert default task statuses
+            $defaultStatuses = [
+                ['new',              'جديد',              'New',              '#5b21b6', '#ede9fe', 0, 1, 0],
+                ['in_progress',      'جاري التنفيذ',      'In Progress',      '#1e40af', '#dbeafe', 1, 0, 0],
+                ['delivered',        'تم التسليم',        'Delivered',        '#0e7490', '#cffafe', 2, 0, 0],
+                ['pending_review',   'بانتظار المراجعة',   'Pending Review',   '#7c3aed', '#f3e8ff', 3, 0, 0],
+                ['needs_revision',   'يحتاج تعديل',       'Needs Revision',   '#92400e', '#fef3c7', 4, 0, 0],
+                ['completed',        'مكتمل',             'Completed',        '#166534', '#dcfce7', 5, 0, 1],
+            ];
+            $stmtStatus = $pdo->prepare("INSERT IGNORE INTO task_statuses (slug, label_ar, label_en, color, bg_color, sort_order, is_default, is_completed) VALUES (?,?,?,?,?,?,?,?)");
+            foreach ($defaultStatuses as $s) {
+                $stmtStatus->execute($s);
+            }
+
             $step = 3; // Move to admin creation step
 
         } catch (PDOException $e) {
@@ -178,14 +192,26 @@ function getTableSQL() {
             `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
 
+        "CREATE TABLE IF NOT EXISTS `task_statuses` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `slug` VARCHAR(50) NOT NULL UNIQUE,
+            `label_ar` VARCHAR(100) NOT NULL,
+            `label_en` VARCHAR(100) NOT NULL,
+            `color` VARCHAR(7) NOT NULL DEFAULT '#6366f1',
+            `bg_color` VARCHAR(7) NOT NULL DEFAULT '#ede9fe',
+            `sort_order` INT DEFAULT 0,
+            `is_default` TINYINT(1) DEFAULT 0,
+            `is_completed` TINYINT(1) DEFAULT 0,
+            `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+
         "CREATE TABLE IF NOT EXISTS `tasks` (
             `id` INT AUTO_INCREMENT PRIMARY KEY,
             `title` VARCHAR(255) NOT NULL,
             `description` TEXT DEFAULT NULL,
             `category` VARCHAR(100) DEFAULT NULL,
-            `status` ENUM('new','in_progress','delivered','pending_review','needs_revision','completed','archived') DEFAULT 'new',
+            `status` VARCHAR(50) DEFAULT 'new',
             `priority` ENUM('low','medium','high','urgent') DEFAULT 'medium',
-            `progress` INT DEFAULT 0,
             `start_date` DATE DEFAULT NULL,
             `due_date` DATE DEFAULT NULL,
             `delivery_date` DATETIME DEFAULT NULL,

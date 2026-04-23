@@ -48,6 +48,9 @@ function navActive($page) {
             <a href="users.php" class="nav-item <?= navActive('users.php') ?>">
                 <i class="fas fa-users"></i><span><?= e($lang['nav_users']) ?></span>
             </a>
+            <a href="statuses.php" class="nav-item <?= navActive('statuses.php') ?>">
+                <i class="fas fa-palette"></i><span><?= e($lang['lang_code'] === 'ar' ? 'إدارة الحالات' : 'Manage Statuses') ?></span>
+            </a>
         <?php endif; ?>
 
         <?php if (isWavesSide()): ?>

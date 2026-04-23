@@ -51,36 +51,87 @@ function timeAgo($datetime) {
 }
 
 /**
- * Get status label in current language
+ * Get all task statuses from DB (cached per request)
  */
-function getStatusLabel($status) {
-    $lang = getLang();
-    $map = [
-        'new' => $lang['status_new'],
-        'in_progress' => $lang['status_in_progress'],
-        'delivered' => $lang['status_delivered'],
-        'pending_review' => $lang['status_pending_review'],
-        'needs_revision' => $lang['status_needs_revision'],
-        'completed' => $lang['status_completed'],
-        'archived' => $lang['status_archived'],
-    ];
-    return $map[$status] ?? $status;
+function getAllStatuses() {
+    static $statuses = null;
+    if ($statuses !== null) return $statuses;
+    global $pdo;
+    try {
+        $statuses = $pdo->query("SELECT * FROM task_statuses ORDER BY sort_order ASC")->fetchAll();
+    } catch (Exception $e) {
+        $statuses = [];
+    }
+    return $statuses;
 }
 
 /**
- * Get CSS class for a task status
+ * Get a single status record by slug
+ */
+function getStatusBySlug($slug) {
+    $all = getAllStatuses();
+    foreach ($all as $s) {
+        if ($s['slug'] === $slug) return $s;
+    }
+    return null;
+}
+
+/**
+ * Get status label in current language
+ */
+function getStatusLabel($status) {
+    $s = getStatusBySlug($status);
+    if ($s) {
+        $lang = getLang();
+        return $lang['lang_code'] === 'ar' ? $s['label_ar'] : $s['label_en'];
+    }
+    return $status;
+}
+
+/**
+ * Get inline style for a task status badge (dynamic colors from DB)
+ */
+function getStatusStyle($status) {
+    $s = getStatusBySlug($status);
+    if ($s) {
+        return 'background:' . e($s['bg_color']) . ';color:' . e($s['color']);
+    }
+    return '';
+}
+
+/**
+ * Get CSS class for a task status (kept for backwards compat, but inline style preferred)
  */
 function getStatusClass($status) {
-    $map = [
-        'new' => 'status-new',
-        'in_progress' => 'status-progress',
-        'delivered' => 'status-delivered',
-        'pending_review' => 'status-review',
-        'needs_revision' => 'status-revision',
-        'completed' => 'status-completed',
-        'archived' => 'status-archived',
-    ];
-    return $map[$status] ?? '';
+    // Return empty - we use inline styles now via getStatusStyle()
+    return '';
+}
+
+/**
+ * Get all status slugs as array
+ */
+function getAllStatusSlugs() {
+    $all = getAllStatuses();
+    return array_column($all, 'slug');
+}
+
+/**
+ * Get the default status slug
+ */
+function getDefaultStatus() {
+    $all = getAllStatuses();
+    foreach ($all as $s) {
+        if ($s['is_default']) return $s['slug'];
+    }
+    return !empty($all) ? $all[0]['slug'] : 'new';
+}
+
+/**
+ * Check if a status is a "completed" type
+ */
+function isCompletedStatus($status) {
+    $s = getStatusBySlug($status);
+    return $s ? (bool)$s['is_completed'] : false;
 }
 
 /**
@@ -288,14 +339,17 @@ function logTaskStatusChange($taskId, $userId, $oldStatus, $newStatus, $comment 
 }
 
 /**
- * Calculate overall project progress from all tasks
+ * Calculate overall project completion from all tasks (using dynamic completed statuses)
  */
 function calculateProjectProgress() {
     global $pdo;
     try {
-        $total = $pdo->query("SELECT COUNT(*) FROM tasks WHERE status != 'archived'")->fetchColumn();
+        $total = (int)$pdo->query("SELECT COUNT(*) FROM tasks")->fetchColumn();
         if ($total == 0) return 0;
-        $completed = $pdo->query("SELECT COUNT(*) FROM tasks WHERE status = 'completed'")->fetchColumn();
+        $completedSlugs = array_column(array_filter(getAllStatuses(), fn($s) => $s['is_completed']), 'slug');
+        if (empty($completedSlugs)) return 0;
+        $in = "'" . implode("','", $completedSlugs) . "'";
+        $completed = (int)$pdo->query("SELECT COUNT(*) FROM tasks WHERE status IN ($in)")->fetchColumn();
         return round(($completed / $total) * 100);
     } catch (Exception $e) {
         return 0;

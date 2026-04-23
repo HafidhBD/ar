@@ -4,16 +4,21 @@ requireLogin();
 $lang = getLang();
 $pageTitle = $lang['dashboard'];
 
-// --- Fetch all stats (single project - no project_id needed) ---
-$totalTasks = (int)$pdo->query("SELECT COUNT(*) FROM tasks WHERE status!='archived'")->fetchColumn();
-$newTasks = (int)$pdo->query("SELECT COUNT(*) FROM tasks WHERE status='new'")->fetchColumn();
-$inProgressTasks = (int)$pdo->query("SELECT COUNT(*) FROM tasks WHERE status='in_progress'")->fetchColumn();
-$deliveredTasks = (int)$pdo->query("SELECT COUNT(*) FROM tasks WHERE status='delivered'")->fetchColumn();
-$pendingReview = (int)$pdo->query("SELECT COUNT(*) FROM tasks WHERE status='pending_review'")->fetchColumn();
-$needsRevision = (int)$pdo->query("SELECT COUNT(*) FROM tasks WHERE status='needs_revision'")->fetchColumn();
-$completedTasks = (int)$pdo->query("SELECT COUNT(*) FROM tasks WHERE status='completed'")->fetchColumn();
-$overdueTasks = (int)$pdo->query("SELECT COUNT(*) FROM tasks WHERE due_date < CURDATE() AND status NOT IN ('completed','archived')")->fetchColumn();
-$completionRate = $totalTasks > 0 ? round(($completedTasks / $totalTasks) * 100) : 0;
+// --- Fetch stats dynamically from DB statuses ---
+$allDbStatuses = getAllStatuses();
+$completedSlugs = array_column(array_filter($allDbStatuses, fn($s) => $s['is_completed']), 'slug');
+$completedIn = !empty($completedSlugs) ? "'" . implode("','", $completedSlugs) . "'" : "'completed'";
+
+$totalTasks = (int)$pdo->query("SELECT COUNT(*) FROM tasks")->fetchColumn();
+$overdueTasks = (int)$pdo->query("SELECT COUNT(*) FROM tasks WHERE due_date < CURDATE() AND status NOT IN ($completedIn)")->fetchColumn();
+
+// Count per status
+$statusCounts = [];
+$stmtCounts = $pdo->query("SELECT status, COUNT(*) as cnt FROM tasks GROUP BY status");
+foreach ($stmtCounts->fetchAll() as $r) $statusCounts[$r['status']] = (int)$r['cnt'];
+
+$completedTasks = 0;
+foreach ($completedSlugs as $cs) $completedTasks += ($statusCounts[$cs] ?? 0);
 
 if (isAdmin()) {
     $totalUsers = (int)$pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
@@ -59,13 +64,10 @@ require_once 'includes/header.php';
                 <?php endif; ?>
             </div>
         </div>
-        <div style="display:flex;align-items:center;gap:16px">
+        <div style="display:flex;align-items:center;gap:12px">
             <div style="text-align:center">
-                <div style="font-size:28px;font-weight:800;color:var(--primary-light)"><?= $completionRate ?>%</div>
-                <div class="text-muted" style="font-size:12px"><?= e($lang['project_progress']) ?></div>
-            </div>
-            <div class="progress-bar" style="width:120px;height:8px">
-                <div class="progress-fill" style="width:<?= $completionRate ?>%"></div>
+                <div style="font-size:26px;font-weight:800;color:var(--primary)"><?= $totalTasks ?></div>
+                <div class="text-muted" style="font-size:12px"><?= e($lang['total_tasks']) ?></div>
             </div>
         </div>
     </div>
@@ -90,11 +92,6 @@ require_once 'includes/header.php';
         <div class="stat-value"><?= $completedTasks ?></div>
         <div class="stat-label"><?= e($lang['completed_tasks']) ?></div>
     </div>
-    <div class="stat-card orange">
-        <div class="stat-header"><div class="stat-icon orange"><i class="fas fa-spinner"></i></div></div>
-        <div class="stat-value"><?= $inProgressTasks ?></div>
-        <div class="stat-label"><?= e($lang['in_progress_tasks']) ?></div>
-    </div>
     <div class="stat-card red">
         <div class="stat-header"><div class="stat-icon red"><i class="fas fa-exclamation-triangle"></i></div></div>
         <div class="stat-value"><?= $overdueTasks ?></div>
@@ -102,26 +99,17 @@ require_once 'includes/header.php';
     </div>
 </div>
 
-<!-- Status Breakdown -->
+<!-- Status Breakdown (dynamic from DB) -->
 <div class="card mb-3">
     <div class="card-header">
         <div class="card-title"><i class="fas fa-chart-pie"></i> <?= e($lang['tasks_by_status']) ?></div>
     </div>
     <div class="card-body">
         <div style="display:flex;flex-wrap:wrap;gap:12px">
-            <?php
-            $statuses = [
-                'new' => ['icon' => 'fa-star', 'count' => $newTasks],
-                'in_progress' => ['icon' => 'fa-spinner', 'count' => $inProgressTasks],
-                'delivered' => ['icon' => 'fa-truck', 'count' => $deliveredTasks],
-                'pending_review' => ['icon' => 'fa-eye', 'count' => $pendingReview],
-                'needs_revision' => ['icon' => 'fa-redo', 'count' => $needsRevision],
-                'completed' => ['icon' => 'fa-check-double', 'count' => $completedTasks],
-            ];
-            foreach ($statuses as $sk => $sv): ?>
+            <?php foreach ($allDbStatuses as $st): $cnt = $statusCounts[$st['slug']] ?? 0; ?>
                 <div style="flex:1;min-width:120px;padding:14px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);text-align:center">
-                    <div style="font-size:24px;font-weight:800;margin-bottom:4px"><?= $sv['count'] ?></div>
-                    <span class="badge <?= getStatusClass($sk) ?>"><i class="fas <?= $sv['icon'] ?>"></i> <?= getStatusLabel($sk) ?></span>
+                    <div style="font-size:24px;font-weight:800;margin-bottom:4px"><?= $cnt ?></div>
+                    <span class="badge" style="<?= getStatusStyle($st['slug']) ?>"><?= e(getStatusLabel($st['slug'])) ?></span>
                 </div>
             <?php endforeach; ?>
         </div>
@@ -150,7 +138,7 @@ require_once 'includes/header.php';
                             </div>
                         </div>
                         <div>
-                            <span class="badge <?= getStatusClass($task['status']) ?>"><?= getStatusLabel($task['status']) ?></span>
+                            <span class="badge" style="<?= getStatusStyle($task['status']) ?>"><?= getStatusLabel($task['status']) ?></span>
                             <div class="notif-time mt-1"><?= formatDate($task['due_date']) ?></div>
                         </div>
                     </div>
